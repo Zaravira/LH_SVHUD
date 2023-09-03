@@ -10,7 +10,7 @@ namespace LH_SVHUD
     {
         public const string pluginGuid = "LH_SVHUD";
         public const string pluginName = "LH_SVHUD";
-        public const string pluginVersion = "0.0.1";
+        public const string pluginVersion = "0.0.4";
 
         public static int StateToggle = 1;
         static GameObject FUHUD;
@@ -36,7 +36,6 @@ namespace LH_SVHUD
         //static GameObject InfoPanel;
         static GameObject SideInfo;
         static GameObject FleetControl;
-        static bool FleetControlBool;
         static float FleetControlRectY;
 
         public void Awake()
@@ -67,16 +66,6 @@ namespace LH_SVHUD
             }
         }
 
-        [HarmonyPatch(typeof(WarpIn), "WarpStart")]
-        [HarmonyPostfix]
-        public static void SetFUHUD(SpaceShip __instance)
-        {
-            if (FUHUD == null)
-                FUHUDSetup();
-            if (__instance.CompareTag("Player"))
-                FUHUDUpdate();
-        }
-
         [HarmonyPatch(typeof(MinimapControl), "UpdateMap")]
         [HarmonyPostfix]
         public static void PreventFUHUDReset(MinimapControl __instance)
@@ -85,12 +74,7 @@ namespace LH_SVHUD
             {
                 if (FUHUD == null)
                     FUHUDSetup();
-                if (FUHUD.activeSelf)
-                    FUHUD.SetActive(false);
-                if (MinimapTemp.activeSelf)
-                    MinimapTemp.SetActive(false);
-                if (SideInfo.activeSelf)
-                    SideInfo.SetActive(false);
+                FUHUDUpdate();
             }
         }
 
@@ -108,13 +92,25 @@ namespace LH_SVHUD
         [HarmonyPostfix]
         public static void MinimizeInfoText(Text ___infoText, Rigidbody ___rb)
         {
+            if (___rb == null)
+                return;
             if (StateToggle == 2)
                 ___infoText.text = Lang.Get(0, 145) + ": <b>" + ___rb.velocity.magnitude.ToString("0.0") + "</b>";
         }
 
-        [HarmonyPatch(typeof(SideInfo), "Reset")]
+        [HarmonyPatch(typeof(SideInfo), "SetNormal")]
         [HarmonyPostfix]
-        public static void KeepSideInfoOFF()
+        public static void KeepSideInfoOFF1()
+        {
+            if (FUHUD == null)
+                FUHUDSetup();
+            if (StateToggle == 3)
+                SideInfo.SetActive(false);
+        }
+
+        [HarmonyPatch(typeof(SideInfo), "SetDiscreet")]
+        [HarmonyPostfix]
+        public static void KeepSideInfoOFF2()
         {
             if (FUHUD == null)
                 FUHUDSetup();
@@ -167,6 +163,22 @@ namespace LH_SVHUD
                 FUHUD.SetActive(false);
         }
 
+        [HarmonyPatch(typeof(Inventory), "EquipSpaceShip")]
+        [HarmonyPrefix]
+        public static void FixSwitch()
+        {
+            if (StateToggle == 3)
+                FUHUD.SetActive(true);
+        }
+
+        [HarmonyPatch(typeof(Inventory), "EquipSpaceShip")]
+        [HarmonyPostfix]
+        public static void FixSwitchEnd()
+        {
+            if (StateToggle == 3)
+                FUHUD.SetActive(false);
+        }
+
         [HarmonyPatch(typeof(GameManager), "PlayerDeath")]
         [HarmonyPrefix]
         public static void FixDying()
@@ -176,7 +188,7 @@ namespace LH_SVHUD
         }
         public static void FUHUDSetup()
         {
-            FUHUD = GameObject.FindGameObjectWithTag("PlayerUI");
+            FUHUD = GameObject.FindGameObjectWithTag("MainCanvas").transform.Find("PlayerUI").gameObject;
             HPBar = FUHUD.transform.GetChild(3).gameObject;
             HPBarVectY = HPBar.transform.localPosition.y;
             EnergyBar = FUHUD.transform.GetChild(4).gameObject;
@@ -203,9 +215,10 @@ namespace LH_SVHUD
         }
         public static void FUHUDUpdate()
         {
-            if (StateToggle == 1)
+            if (StateToggle == 1 && FUHUD.activeSelf == false)
             {
-                FleetControl.SetActive(FleetControlBool);
+                if (PChar.Char.GetFleetSize > 0)
+                    FleetControl.SetActive(true);
                 FUHUD.SetActive(true);
                 Target.SetActive(true);
                 BuffIconsBottom.SetActive(true);
@@ -240,8 +253,8 @@ namespace LH_SVHUD
                 InfoText.GetComponent<RectTransform>().sizeDelta = new Vector2(InfoText.GetComponent<RectTransform>().sizeDelta.x, InfoTextRectY);
                 InfoText.transform.localPosition = new Vector3(InfoText.transform.localPosition.x, InfoTextVectY, InfoText.transform.localPosition.z);
                 FleetControl.GetComponent<RectTransform>().sizeDelta = new Vector2(FleetControl.GetComponent<RectTransform>().sizeDelta.x, FleetControlRectY);
-                FleetControlBool = FleetControl.activeSelf;
-                FleetControl.SetActive(false);
+                if (PChar.Char.GetFleetSize > 0)
+                    FleetControl.SetActive(false);
                 HPBar.transform.localPosition = new Vector3(HPBar.transform.localPosition.x, HPBarVectY, HPBar.transform.localPosition.z);
                 EnergyBar.transform.localPosition = new Vector3(EnergyBar.transform.localPosition.x, EnergyBarVectY, EnergyBar.transform.localPosition.z);
                 ShieldBar.transform.localPosition = new Vector3(ShieldBar.transform.localPosition.x, ShieldBarVectY, ShieldBar.transform.localPosition.z);
